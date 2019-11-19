@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+    .links line {
+        stroke: #999;
+        stroke-opacity: 0.6;
+    }
+
+    .nodes circle {
+        stroke: #fff;
+        stroke-width: 1.5px;
+    }
+
+    text {
+        font-family: sans-serif;
+        font-size: 10px;
+    }
+</style>
+
+<script src="https://d3js.org/d3.v5.js"></script>
+<svg id="task_1"></svg>
+<svg id="task_2"></svg>
+<svg id="task_3"></svg>
+
+<script>
+    class Task_1 {
+        constructor() {
+            this.margin = { top: 20, right: 30, bottom: 30, left: 60 };
+            this.width = 1080;
+            this.height = 540;
+            this.svg = d3.select("#task_1")
+                .attr("width", this.width + this.margin.left + this.margin.right)
+                .attr("height", this.height + this.margin.top + this.margin.bottom)
+                .append("g")
+                .attr("transform", "translate(" + this.margin.left + "," + this.margin.top + ")")
+
+            this.x = d3.scaleLinear().range([20, this.width / 10 * 9])
+            this.svg.append("g")
+                .attr("class", "myXaxis")
+
+            this.y = d3.scaleLinear().range([20, this.height]);
+            this.svg.append("g")
+                .attr("class", "myYaxis")
+
+            this.min = true
+            this.load_data()
+        }
+
+        load_data() {
+            var o = this
+            d3.json("{% url 'graph:task_1' %}").then(function (data) {
+                // Add X axis
+                o.x.domain(d3.extent(data,
+                    function (d) {
+                        return (new Date(d.month)).getFullYear()
+                    }))
+                o.svg.selectAll(".myXaxis").transition()
+                    .duration(300)
+                    .call(d3.axisTop(o.x).ticks(20).tickFormat(d3.format("d")));
+
+                // Add Y axis
+                var month = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                o.y.domain(d3.extent(data,
+                    function (d) {
+                        return (new Date(d.month)).getMonth()
+                    }))
+                o.svg.selectAll(".myYaxis").transition()
+                    .duration(300)
+                    .call(d3.axisLeft(o.y)
+                        .tickFormat(function (d, i) {
+                            return month[d];
+                        }));
+
+                // Add dots
+                var fill = d3.scaleSequential().domain([0, 40]).interpolator(d3.interpolateTurbo);
+                var arc = d3.symbol().size(1600).type(d3.symbolSquare);
+
+                var u = o.svg.selectAll(".dot").data(data);
+                u.enter()
+                    .append("path")
+                    .attr("class", "dot")
+                    .merge(u)
+                    .transition()
+                    .duration(300)
+                    .attr("d", arc)
+                    .style("fill", function (d, i) {
+                        if (o.min === true) {
+                            return fill(d.min_temperature);
+                        }
+                        else {
+                            return fill(d.max_temperature);
+                        }
+                    })
+                    .attr("transform", function (d) { return "translate(" + o.x((new Date(d.month)).getFullYear()) + "," + o.y((new Date(d.month)).getMonth()) + ")"; });
+                u.exit().remove()
+
+                // Add actions on rectangles
+                // change display min/max
+                o.svg.selectAll(".dot").on('click', function (d) {
+                    o.min = !o.min;
+                    o.load_data()
+                })
+
+                // show text box when hover
+                o.svg.selectAll(".dot").on('mouseover', function (d) {
+                    u = o.svg.selectAll(".box").data(data);
+                    u.enter()
+                        .append("rect")
+                        .attr("class", "box")
+                        .merge(u)
+                        .attr("x", o.x((new Date(d.month)).getFullYear()))
+                        .attr("y", o.y((new Date(d.month)).getMonth()))
+                        .attr("width", 250)
+                        .attr("height", 30)
+                        .attr("fill", "gray")
+                    u.exit().remove()
+
+                    u = o.svg.selectAll(".box_text").data(data);
+                    u.enter()
+                        .append("text")
+                        .attr("class", "box_text")
+                        .merge(u)
+                        .attr("x", o.x((new Date(d.month)).getFullYear()) + 10)
+                        .attr("y", o.y((new Date(d.month)).getMonth()) + 15)
+                        .attr("fill", "black")
+                        .text("Date: " + d.month + " max: " + d.max_temperature + " min : " + d.min_temperature)
+                        .attr("text-anchor", "left")
+                        .style("alignment-baseline", "middle")
+                        .attr("dy", ".1em")
+                    u.exit().remove()
+                })
+
+                // clear text box when mouse is out
+                o.svg.selectAll(".dot").on('mouseout', function (d) {
+                    u = o.svg.selectAll(".box").data([]);
+                    u.exit().remove()
+
+                    u = o.svg.selectAll(".box_text").data([]);
+                    u.exit().remove()
+                })
+
+                // Add legends
+                data = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+                u = o.svg.selectAll(".legend_color").data(data);
+                u.enter()
+                    .append("rect")
+                    .attr("class", "legend_color")
+                    .merge(u)
+                    .transition()
+                    .duration(300)
+                    .attr("x", o.margin.left + o.width / 10 * 9)
+                    .attr("y", function (d, i) {
+                        return o.margin.top + i * 40
+                    })
+                    .attr("width", 40)
+                    .attr("height", 40)
+                    .attr("fill", function (d) {
+                        return fill(4 * d)
+                    })
+                u.exit().remove()
+
+                u = o.svg.selectAll(".legend_text").data(data);
+                u.enter()
+                    .append("text")
+                    .attr("class", "legend_text")
+                    .merge(u)
+                    .transition()
+                    .duration(0)
+                    .attr("x", o.margin.left + o.width / 10 * 9 + 40)
+                    .attr("y", function (d, i) {
+                        return o.margin.top + i * 40 + 20
+                    })
+                    .attr("fill", "black")
+                    .text(function (d) {
+                        return d * 4
+                    })
+                    .attr("text-anchor", "left")
+                    .style("alignment-baseline", "middle")
+                    .attr("dy", ".1em")
+                u.exit().remove()
+            })
+        }
+    }
+    var task_1 = new Task_1();
+
+
+    class Task_2 {
+        constructor() {
+            this.margin = { top: 20, right: 40, bottom: 30, left: 60 };
+            this.width = 800;
+            this.height = 800;
+            this.svg = d3.select("#task_2")
+                .attr("width", this.width + this.margin.left + this.margin.right)
+                .attr("height", this.height + this.margin.top + this.margin.bottom)
+                .append("g")
+                .attr("transform", "translate(" + this.margin.left + "," + this.margin.top + ")")
+
+            this.x = d3.scaleLinear().range([50, this.width / 10 * 9])
+            this.svg.append("g")
+                .attr("class", "myXaxis")
+
+            this.y = d3.scaleLinear().range([50, this.height]);
+            this.svg.append("g")
+                .attr("class", "myYaxis")
+
+            this.min = true
+            this.load_data()
+        }
+
+        load_data() {
+            var o = this
+            d3.json("{% url 'graph:task_2' %}").then(function (data) {
+                // Add X axis
+                o.x.domain(d3.extent(data,
+                    function (d) {
+                        return (new Date(d.month)).getFullYear()
+                    }))
+                o.svg.selectAll(".myXaxis").transition()
+                    .duration(300)
+                    .call(d3.axisTop(o.x).ticks(10).tickFormat(d3.format("d")));
+
+                // Add Y axis
+                var month = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                o.y.domain(d3.extent(data,
+                    function (d) {
+                        return (new Date(d.month)).getMonth()
+                    }))
+                o.svg.selectAll(".myYaxis").transition()
+                    .duration(300)
+                    .call(d3.axisLeft(o.y)
+                        .tickFormat(function (d, i) {
+                            return month[d];
+                        }));
+
+                // Add dots
+                var fill = d3.scaleSequential().domain([0, 40]).interpolator(d3.interpolateTurbo);
+                var arc = d3.symbol().size(2500).type(d3.symbolSquare);
+
+                var u = o.svg.selectAll(".dot").data(data);
+                u.enter()
+                    .append("path")
+                    .attr("class", "dot")
+                    .merge(u)
+                    .transition()
+                    .duration(300)
+                    .attr("d", arc)
+                    .style("fill", function (d, i) {
+                        if (o.min === true) {
+                            return fill(d.min_temperature);
+                        }
+                        else {
+                            return fill(d.max_temperature);
+                        }
+                    })
+                    .attr("transform", function (d) { return "translate(" + o.x((new Date(d.month)).getFullYear()) + "," + o.y((new Date(d.month)).getMonth()) + ")"; });
+                u.exit().remove()
+
+                u = o.svg.selectAll(".dot").data(data);
+                u.each(function (data, i) {
+                    var x = d3.scaleLinear()
+                        .domain(d3.extent(data.detail, function (d) { return d.day; }))
+                        .range([o.x((new Date(data.month)).getFullYear()) - 25, o.x((new Date(data.month)).getFullYear()) + 25]);
+                    var y = d3.scaleLinear()
+                        .domain([0, 40])
+                        .range([o.y((new Date(data.month)).getMonth()) - 25, o.y((new Date(data.month)).getMonth()) + 25]);
+
+                    o.svg.append("path")
+                        .datum(data.detail)
+                        .attr("fill", "none")
+                        .attr("stroke", "steelblue")
+                        .attr("stroke-width", 1.5)
+                        .attr("d", d3.line()
+                            .x(function (d) { return x(d.day) })
+                            .y(function (d) { return y(d.min_temperature) })
+                        )
+                    o.svg.append("path")
+                        .datum(data.detail)
+                        .attr("fill", "none")
+                        .attr("stroke", "black")
+                        .attr("stroke-width", 1.5)
+                        .attr("d", d3.line()
+                            .x(function (d) { return x(d.day) })
+                            .y(function (d) { return y(d.max_temperature) })
+                        )
+
+                })
+
+
+
+                // Add actions on rectangles
+                // change display min/max
+                o.svg.selectAll(".dot").on('click', function (d) {
+                    o.min = !o.min;
+                    o.load_data()
+                })
+
+                // show text box when hover
+                o.svg.selectAll(".dot").on('mouseover', function (d) {
+                    u = o.svg.selectAll(".box").data(data);
+                    u.enter()
+                        .append("rect")
+                        .attr("class", "box")
+                        .merge(u)
+                        .attr("x", o.x((new Date(d.month)).getFullYear()))
+                        .attr("y", o.y((new Date(d.month)).getMonth()))
+                        .attr("width", 250)
+                        .attr("height", 30)
+                        .attr("fill", "gray")
+                    u.exit().remove()
+
+                    u = o.svg.selectAll(".box_text").data(data);
+                    u.enter()
+                        .append("text")
+                        .attr("class", "box_text")
+                        .merge(u)
+                        .attr("x", o.x((new Date(d.month)).getFullYear()) + 10)
+                        .attr("y", o.y((new Date(d.month)).getMonth()) + 15)
+                        .attr("fill", "black")
+                        .text("Date: " + d.month + " max: " + d.max_temperature + " min : " + d.min_temperature)
+                        .attr("text-anchor", "left")
+                        .style("alignment-baseline", "middle")
+                        .attr("dy", ".1em")
+                    u.exit().remove()
+                })
+
+                // clear text box when mouse is out
+                o.svg.selectAll(".dot").on('mouseout', function (d) {
+                    u = o.svg.selectAll(".box").data([]);
+                    u.exit().remove()
+
+                    u = o.svg.selectAll(".box_text").data([]);
+                    u.exit().remove()
+                })
+
+                // Add legends
+                data = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+                u = o.svg.selectAll(".legend_color").data(data);
+                u.enter()
+                    .append("rect")
+                    .attr("class", "legend_color")
+                    .merge(u)
+                    .transition()
+                    .duration(300)
+                    .attr("x", o.margin.left + o.width / 10 * 9)
+                    .attr("y", function (d, i) {
+                        return o.margin.top + i * 40
+                    })
+                    .attr("width", 40)
+                    .attr("height", 40)
+                    .attr("fill", function (d) {
+                        return fill(4 * d)
+                    })
+                u.exit().remove()
+
+                u = o.svg.selectAll(".legend_text").data(data);
+                u.enter()
+                    .append("text")
+                    .attr("class", "legend_text")
+                    .merge(u)
+                    .transition()
+                    .duration(0)
+                    .attr("x", o.margin.left + o.width / 10 * 9 + 40)
+                    .attr("y", function (d, i) {
+                        return o.margin.top + i * 40 + 20
+                    })
+                    .attr("fill", "black")
+                    .text(function (d) {
+                        return d * 4
+                    })
+                    .attr("text-anchor", "left")
+                    .style("alignment-baseline", "middle")
+                    .attr("dy", ".1em")
+                u.exit().remove()
+            })
+        }
+    }
+    var task_2 = new Task_2();
+
+
+    class Task_3 {
+        constructor() {
+            this.margin = { top: 20, right: 40, bottom: 30, left: 60 };
+            this.width = 800;
+            this.height = 400;
+
+            var svg = d3.select("#task_3")
+                .attr("width", this.width + this.margin.left + this.margin.right)
+                .attr("height", this.height + this.margin.top + this.margin.bottom)
+            this.svg_force = svg.append("g")
+                .attr("transform", "translate(" + this.margin.left + "," + this.margin.top + ")");
+            this.svg_matrix = svg.append("g")
+                .attr("transform", "translate(" + (this.margin.left + this.width / 2) + "," + this.margin.top + ")");
+
+            var color = d3.scaleOrdinal(d3.schemeCategory10);
+
+            var simulation = d3.forceSimulation()
+                .force("link", d3.forceLink().id(function (d) { return d.id; }))
+                .force("charge", d3.forceManyBody())
+                .force("center", d3.forceCenter(this.width / 4, this.height / 2));
+
+            var o = this
+            d3.json("{% url 'graph:task_3' %}").then(function (graph) {
+                var link = o.svg_force.append("g")
+                    .attr("class", "links")
+                    .selectAll("line")
+                    .data(graph.links)
+                    .enter()
+                    .append("line")
+                    .attr("stroke-width", function (d) { return Math.sqrt(d.value); });
+
+                var node = o.svg_force.append("g")
+                    .attr("class", "nodes")
+                    .selectAll("g")
+                    .data(graph.nodes)
+                    .enter()
+                    .append("g")
+
+                var circles = node.append("circle")
+                    .attr("r", 5)
+                    .attr("fill", function (d) { return color(d.group); })
+                    .call(d3.drag()
+                        .on("start", dragstarted)
+                        .on("drag", dragged)
+                        .on("end", dragended));
+
+                node.on('mouseover', function (d) {
+                    var fill = d3.scaleSequential().domain([0, 30]).interpolator(d3.interpolateTurbo);
+                    var arc = d3.symbol().size(40).type(d3.symbolSquare);
+
+                    var data = [];
+                    for (var i = 0; i < graph.links.length; i++) {
+                        if (d.id === graph.links[i].source.id || d.id === graph.links[i].target.id) {
+                            data.push({ source: graph.links[i].source.id, target: graph.links[i].target.id, value: graph.links[i].value })
+                            data.push({ source: graph.links[i].target.id, target: graph.links[i].source.id, value: graph.links[i].value })
+                        }
+                    }
+                    var u = o.svg_matrix.selectAll(".dot_high").data(data);
+                    u.enter()
+                        .append("path")
+                        .attr("class", "dot_high")
+                        .merge(u)
+                        .attr("d", arc)
+                        .style("stroke", "red")
+                        .style("stroke-width", 2)
+                        .style("fill", function (d) {
+                            return fill(d.value)
+                        })
+                        .attr("transform", function (d) { return "translate(" + x(d.source) + "," + x(d.target) + ")"; });
+                    u.exit().remove()
+                })
+
+                node.on('mouseout', function (d) {
+                    var u = o.svg_matrix.selectAll(".dot_high").data([]);
+                    u.exit().remove()
+                })
+
+
+
+
+
+
+                /*var lables = node.append("text")
+                        .text(function (d) {
+                            return d.id;
+                        })
+                        .attr('x', 6)
+                        .attr('y', 3);*/
+
+                node.append("title")
+                    .text(function (d) { return d.id; });
+
+                simulation
+                    .nodes(graph.nodes)
+                    .on("tick", ticked);
+
+                simulation.force("link")
+                    .links(graph.links);
+
+                function ticked() {
+                    link
+                        .attr("x1", function (d) { return d.source.x; })
+                        .attr("y1", function (d) { return d.source.y; })
+                        .attr("x2", function (d) { return d.target.x; })
+                        .attr("y2", function (d) { return d.target.y; });
+
+                    node
+                        .attr("transform", function (d) {
+                            return "translate(" + d.x + "," + d.y + ")";
+                        })
+                }
+
+
+
+
+                var names = [], nums = [];
+                for (var i = 0; i < graph.nodes.length; i++) {
+                    names.push(graph.nodes[i].id);
+                    nums.push(10 + i * o.width / 2 / graph.nodes.length)
+                }
+
+                var x = d3.scaleOrdinal()
+                    .range(nums)
+                    /*.domain(graph.nodes, function (d) {
+                        return d.id;
+                    })*/
+                    .domain(names)
+
+                o.svg_matrix.append("g")
+                    .attr("class", "myXaxis")
+                    .call(d3.axisTop(x));
+
+                o.svg_matrix.append("g")
+                    .attr("class", "myYaxis")
+                    .call(d3.axisLeft(x));
+
+                /*o.svg_matrix.selectAll('text').data(graph.nodes).enter().append("text")
+                    .attr("x", function (d, i) {
+                        return x(d.id)
+                    })
+                    .text(function (d) {
+                        return d
+                    })*/
+
+                var data = [];
+                for (var i = 0; i < graph.nodes.length; i++) {
+                    for (var j = 0; j < graph.nodes.length; j++) {
+                        data.push({ x: graph.nodes[i].id, y: graph.nodes[j].id })
+
+                    }
+                }
+
+                var fill = d3.scaleSequential().domain([0, 30]).interpolator(d3.interpolateTurbo);
+                var arc = d3.symbol().size(40).type(d3.symbolSquare);
+
+                var u = o.svg_matrix.selectAll(".dot").data(data);
+                u.enter()
+                    .append("path")
+                    .attr("class", "dot")
+                    .merge(u)
+                    .attr("d", arc)
+                    .style("fill", "gray")
+                    .attr("transform", function (d) { return "translate(" + x(d.x) + "," + x(d.y) + ")"; });
+                u.exit().remove()
+
+                var data = [];
+                for (var i = 0; i < graph.links.length; i++) {
+                    data.push({ source: graph.links[i].source.id, target: graph.links[i].target.id, value: graph.links[i].value })
+                    data.push({ source: graph.links[i].target.id, target: graph.links[i].source.id, value: graph.links[i].value })
+                }
+                u = o.svg_matrix.selectAll(".dot_").data(data);
+                u.enter()
+                    .append("path")
+                    .attr("class", "dot_")
+                    .merge(u)
+                    .attr("d", arc)
+                    .style("fill", function (d) {
+                        return fill(d.value)
+                    })
+                    .attr("transform", function (d) { return "translate(" + x(d.source) + "," + x(d.target) + ")"; });
+                u.exit().remove()
+
+
+
+                o.svg_matrix.selectAll(".dot_").on('mouseover', function (d) {
+                    var data = { source: {}, target: {} };
+                    data.value = d.value * 2
+                    for (var i = 0; i < graph.nodes.length; i++) {
+                        if (graph.nodes[i].id === d.source) {
+                            data.source.x = graph.nodes[i].x;
+                            data.source.y = graph.nodes[i].y;
+                        }
+                        if (graph.nodes[i].id === d.target) {
+                            data.target.x = graph.nodes[i].x;
+                            data.target.y = graph.nodes[i].y;
+                        }
+                    }
+
+                    var u = o.svg_force.selectAll(".line_high").data([1])
+                    u.enter()
+                        //.attr("class", "links")
+                        .append("line")
+                        .attr("class", "line_high")
+                        .merge(u)
+                        .attr("x1", data.source.x)
+                        .attr("y1", data.source.y)
+                        .attr("x2", data.target.x)
+                        .attr("y2", data.target.y)
+                        .attr("stroke", "red")
+                        .attr("stroke-opacity", 0.6)
+                        .attr("stroke-width", Math.sqrt(data.value));
+                    u.exit().remove()
+                })
+
+                o.svg_matrix.selectAll(".dot_").on('mouseout', function (d) {
+                    var u = o.svg_force.selectAll(".line_high").data([])
+                    u.exit().remove()
+                })
+
+
+            });
+
+            function dragstarted(d) {
+                if (!d3.event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            }
+
+            function dragged(d) {
+                d.fx = d3.event.x;
+                d.fy = d3.event.y;
+            }
+
+            function dragended(d) {
+                if (!d3.event.active) simulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            }
+        }
+    }
+    task_3 = new Task_3()
+</script>
